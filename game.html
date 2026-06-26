@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Fixed Clicker + Multiplier</title>
+    <style>
+        body { font-family: sans-serif; background: #1e1e2e; color: white; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; }
+        #stats { background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin-bottom: 20px; width: 320px; text-align: center; }
+        .btn { width: 200px; height: 200px; border-radius: 50%; background: linear-gradient(145deg, #ff416c, #ff4b2b); border: none; color: white; font-size: 40px; cursor: pointer; box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
+        .shop { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; width: 90%; max-width: 800px; }
+        .card { background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.1); }
+        .cost { color: #ffaa00; font-weight: bold; margin-top: 5px; }
+        .buy { width: 100%; padding: 8px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 8px; }
+        .buy:disabled { background: #555; cursor: not-allowed; opacity: 0.7; }
+        #share { margin-top: 25px; padding: 12px; background: rgba(0,0,0,0.4); width: 450px; word-break: break-all; cursor: pointer; user-select: all; border-radius: 6px; color: orange; }
+    </style>
+</head>
+<body>
+
+    <h1>Clicker Pro: Fixed Version</h1>
+
+    <!-- Статистика -->
+    <div id="stats">
+        <div style="font-size:20px; font-weight:bold; margin-bottom:10px;">Счет: <span id="s">0</span></div>
+        <hr style="border:0; border-top:1px solid rgba(255,255,255,0.2); margin:10px 0;">
+        <div>Сила клика: <span id="p">1</span></div>
+        <div>Множитель: <span style="color:#ffd700;">x<span id="m">1</span></span></div>
+        <div>Крит шанс: <span id="c">1%</span></div>
+        <br>
+        <div style="color:#888; font-size:12px;">Авто-клики: <span id="ac">0</span> | Скорость: <span id="as">3.0</span>с | Сила авто: <span id="ap">1</span></div>
+    </div>
+
+    <button id="main" class="btn" onclick="clickGame()">КЛИК!</button>
+
+    <h3>Магазин</h3>
+    <div class="shop">
+        <!-- 1. Сила клика -->
+        <div class="card">
+            <span>+1 к силе клика</span>
+            <div class="cost" id="cp">Цена: 100</div>
+            <button class="buy" onclick="buy('power')">Купить</button>
+        </div>
+        
+        <!-- 2. Множитель (ИСПРАВЛЕНО) -->
+        <div class="card">
+            <span style="color:#ffd700;">✨ x1 Множитель</span>
+            <div class="cost" id="cm">Цена: 2000</div>
+            <div style="font-size:11px;color:#aaa;">Умножает урон ручного клика</div>
+            <button class="buy" onclick="buy('mult')">Купить</button>
+        </div>
+
+        <!-- 3. Крит шанс -->
+        <div class="card">
+            <span>+1% к шансу крита</span>
+            <div class="cost" id="cc">Цена: 500</div>
+            <button class="buy" onclick="buy('crit')">Купить</button>
+        </div>
+
+        <!-- 4. Ускорение авто-клика -->
+        <div class="card">
+            <span>⚡ Ускорение авто</span>
+            <div class="cost" id="cas">Цена: 200</div>
+            <div style="font-size:11px;color:#aaa;">-0.1 сек за уровень</div>
+            <button class="buy" onclick="buy('aspeed')">Купить</button>
+        </div>
+
+        <!-- 5. Сила авто-клика -->
+        <div class="card">
+            <span>💪 Сила авто-клика</span>
+            <div class="cost" id="cap">Цена: 200</div>
+            <div style="font-size:11px;color:#aaa;">+1 урон за авто-клик</div>
+            <button class="buy" onclick="buy('apower')">Купить</button>
+        </div>
+    </div>
+
+    <div id="share" onclick="copyLink()">Нажмите сюда, чтобы получить ссылку с прогрессом</div>
+
+<script>
+    // --- Переменные ---
+    let s = 0;          // Счет
+    let p = 1;          // Сила клика
+    let m = 1;          // Множитель (НОВОЕ)
+    let c = 1;          // Крит шанс
+    
+    let ap = 1;         // Сила авто-клика
+    let baseAs = 3.0;   // Базовая скорость авто
+    let curAs = 3.0;    // Текущая скорость авто
+    let ac = 0;         // Счетчик авто-кликов
+    
+    // Цены
+    let cp = 100;       // Цена силы
+    let cm = 2000;      // Цена множителя (ИСПРАВЛЕНО: теперь реально используется)
+    let cc = 500;       // Цена крита
+    let cas = 200;      // Цена ускорения
+    let cap = 200;      // Цена силы авто
+
+    let timer = null;
+
+    // --- Загрузка ---
+    function load() {
+        const url = new URLSearchParams(location.search).get('data');
+        const data = url ? JSON.parse(atob(url)) : JSON.parse(localStorage.getItem('g') || '{}');
+        
+        if(data) { 
+            s = data.s || 0; 
+            p = data.p || 1; 
+            m = data.m || 1;       // Загружаем множитель
+            c = data.c || 1; 
+            ap = data.ap || 1; 
+            baseAs = data.baseAs || 3; 
+            curAs = data.curAs || 3; 
+            ac = data.ac || 0; 
+            
+            cp = data.cp || 100; 
+            cm = data.cm || 2000;  // Загружаем цену множителя
+            cc = data.cc || 500; 
+            cas = data.cas || 200; 
+            cap = data.cap || 200; 
+        }
+        startTimer();
+        update();
+    }
+
+    // --- Сохранение и ссылка ---
+    function save() {
+        const d = {s, p, m, c, ap, baseAs, curAs, ac, cp, cm, cc, cas, cap};
+        localStorage.setItem('g', JSON.stringify(d));
+        
+        const link = location.pathname + '?data=' + btoa(JSON.stringify(d));
+        document.getElementById('share').innerText = link;
+    }
+
+    // --- Авто-клик ---
+    function startTimer() { 
+        if(timer) clearInterval(timer); 
+        timer = setInterval(() => { 
+            // Авто-клик тоже умножается на общий множитель m (для баланса)
+            let dmg = ap * m; 
+            if(Math.random() * 100 < c) dmg *= 2; 
+            s += dmg; 
+            ac++; 
+            update(); 
+            save(); 
+        }, curAs * 1000); 
+    }
+
+    // --- Ручной клик ---
+    function clickGame() {
+        // ГЛАВНАЯ ФОРМУЛА: Сила (p) * Множитель (m)
+        let dmg = p * m;
+        if(Math.random() * 100 < c) {
+            dmg *= 2;
+        }
+        s += dmg;
+        update(); 
+        save();
+    }
+
+    // --- Покупка улучшений ---
+    function buy(type) {
+        switch(type) {
+            case 'power':
+                if(s >= cp) { s -= cp; p++; cp += 250; }
+                break;
+            
+            case 'mult': // Покупка множителя
+                if(s >= cm) { 
+                    s -= cm; 
+                    m++; 
+                    cm += 500; // Цена растет на 500
+                }
+                break;
+
+            case 'crit':
+                if(s >= cc) { s -= cc; c++; cc += 250; }
+                break;
+
+            case 'aspeed':
+                if(s >= cas) { 
+                    s -= cas; 
+                    baseAs -= 0.1; 
+                    if(baseAs < 0.1) baseAs = 0.1; 
+                    curAs = baseAs; 
+                    startTimer(); // Перезапуск таймера
+                    cas += 250; 
+                }
+                break;
+
+            case 'apower':
+                if(s >= cap) { s -= cap; ap++; cap += 250; }
+                break;
+        }
+        update(); 
+        save();
+    }
+
+    // --- Обновление интерфейса ---
+    function update() {
+        document.getElementById('s').innerText = Math.floor(s);
+        document.getElementById('p').innerText = p;
+        document.getElementById('m').innerText = m; // Обновляем множитель
+        document.getElementById('c').innerText = c + '%';
+        document.getElementById('ac').innerText = ac;
+        document.getElementById('as').innerText = curAs.toFixed(1);
+        document.getElementById('ap').innerText = ap;
+        
+        // Обновляем цены
+        document.getElementById('cp').innerText = 'Цена: ' + Math.floor(cp);
+        document.getElementById('cm').innerText = 'Цена: ' + Math.floor(cm); // Теперь цена множителя обновляется
+        document.getElementById('cc').innerText = 'Цена: ' + Math.floor(cc);
+        document.getElementById('cas').innerText = 'Цена: ' + Math.floor(cas);
+        document.getElementById('cap').innerText = 'Цена: ' + Math.floor(cap);
+
+        // Блокировка кнопок, если не хватает денег
+        document.getElementById('btn-power').disabled = s < cp;
+        document.getElementById('btn-mult').disabled = s < cm;
+        document.getElementById('btn-crit').disabled = s < cc;
+        document.getElementById('btn-aspeed').disabled = s < cas;
+        document.getElementById('btn-apower').disabled = s < cap;
+    }
+
+    function copyLink() {
+        navigator.clipboard.writeText(document.getElementById('share').innerText).then(() => alert('Ссылка скопирована!'));
+    }
+
+    load();
+</script>
+</body>
+</html>
